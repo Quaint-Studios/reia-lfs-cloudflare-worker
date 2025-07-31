@@ -44,6 +44,22 @@ Bind these to your Worker:
 
 ## Local Setup
 
+### Prerequisites
+
+- Make sure you have [Git LFS](https://git-lfs.github.com/) installed:
+  ```sh
+  git lfs install
+  ```
+  > You only need to do this once per machine.
+
+- (Optional) Track LFS files in your repo:
+  ```sh
+  git lfs track "*.blend"
+  git add .gitattributes
+  git commit -m "Track .blend files using Git LFS"
+  ```
+
+
 ### Configure LFS URL
 
 Create a `.lfsconfig` file in your Git repository:
@@ -82,6 +98,24 @@ password YOUR_JWT_TOKEN_HERE
 ### Push and Pull
 - **Push:** When you push, Git LFS will use your server for uploads and require your JWT token.
 - **Pull/Clone:** When you pull or clone, Git LFS will fetch objects from your server (no token required).
+
+## Troubleshooting
+
+- **403/401 errors when uploading:**  
+  Ensure your token is valid, not revoked, and properly stored in the credential helper or `.netrc`.
+- **"Object already exists" errors:**  
+  Means the object (by hash) is already uploaded.
+- **Cannot push LFS objects:**  
+  Double-check `.lfsconfig` URL and your credential setup.
+
+---
+
+## References
+
+- [Git LFS Documentation](https://github.com/git-lfs/git-lfs/blob/main/docs/api/basic-transfers.md)
+- [Cloudflare Workers Docs](https://developers.cloudflare.com/workers/)
+- [Cloudflare R2 Docs](https://developers.cloudflare.com/r2/)
+
 ---
 
 MIT License  
