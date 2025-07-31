@@ -36,13 +36,53 @@ Bind these to your Worker:
 ## Usage Notes
 
 - **Tokens:**  
-  Generate with `/generate`, add to KV, and use as Bearer tokens for uploads.
+  Generate with `/generate`, add to KV, and use as Bearer tokens for uploads or a Basic token (guide below).
 - **Revocation:**  
-  Remove from KV or use `/revoke` to block uploads with a token.
+  Remove from KV or use `/revoke?key=<TOKEN>` to block uploads with a token.
 - **Customization:**  
   Change `REPO_URL`, `BUCKET_URL`, and `WORKER_URL` constants as needed.
 
+## Local Setup
+
+### Configure LFS URL
+
+Create a `.lfsconfig` file in your Git repository:
+
+```ini
+[lfs]
+url = https://lfs.playreia.com/objects/batch
+```
+or set it globally
+```sh
+git config --global lfs.url https://lfs.playreia.com/objects/batch
+```
+
+### Authenticate for Uploads
+
+You need a valid JWT token (from `/generate` and present in your KV store) for uploads.
+
+**Option 1: Use** `git credentials approve`
+Then paste this in there (make sure the change the JWT token):
+```ini
+protocol=https
+host=lfs.playreia.com
+username=whatever
+password=YOUR_JWT_TOKEN_HERE
+```
+
+**Option 2: Add to** `.netrc`
+On Linux: `~/.netrc`
+On Windows: `%USERPROFILE%\.netrc`
+```ini
+machine lfs.playreia.com
+login whatever
+password YOUR_JWT_TOKEN_HERE
+```
+
+### Push and Pull
+- **Push:** When you push, Git LFS will use your server for uploads and require your JWT token.
+- **Pull/Clone:** When you pull or clone, Git LFS will fetch objects from your server (no token required).
 ---
 
 MIT License  
-Author: Quaint Studios,
+Author: Quaint Studios, Kristopher Ali
