@@ -73,6 +73,8 @@ or set it globally
 git config --global lfs.url https://lfs.playreia.com/objects/batch
 ```
 
+type `git lfs env` and you should see `Endpoint=https://lfs.playreia.com/objects/batch (auth=none)`
+
 ### Authenticate for Uploads
 
 You need a valid JWT token (from `/generate` and present in your KV store) for uploads.
