@@ -1,26 +1,7 @@
 /// Cloudflare Worker for Git LFS Server with R2 and JWT Authentication
 /// Author: Quaint Studios, Kristopher Ali
 /// License: MIT
-/// There are 4 main routes:
-/// 1. /lfs/objects/:oid - GET for downloading and PUT for uploading
-/// 2. /generate - GET to generate a JWT token
-/// 3. /revoke - POST to revoke a JWT token
-/// 4. /objects/batch - POST for Git LFS Batch API requests (upload/download metadata)
-///
-/// Tokens can be generated freely.
-/// You need the following environment variables bound to your Worker:
-/// - LFS_ALLOWED_TOKENS: A KV namespace to store allowed tokens.
-/// - LFS_JWT_SECRET: A secret key for signing JWT tokens.
-///     Generate a token with this command: `node -e "console.log(require('crypto').randomBytes(64).toString('base64'));"`
-/// - LFS_BUCKET: An R2 bucket for storing LFS objects.
-///
-/// Users should be able to read your bucket freely.
-/// Users *require* a valid JWT token to upload objects.
-/// The token should be added to the KV store manually from /generate.
-/// The token can be revoked via /revoke.
-///
-/// You can customize the REPO_URL, BUCKET_URL, and WORKER_URL constants below to match your setup.
-
+/// How to configure: https://github.com/Quaint-Studios/reia-lfs-cloudflare-worker/blob/main/README.md
 
 // Define the Git LFS content type
 const LFS_CONTENT_TYPE = 'application/vnd.git-lfs+json';
@@ -346,14 +327,27 @@ async function handleObjectRequest(request, env, secretKey, oid) {
 	} else if (method === 'PUT') {
 		// Require Authorization header with Bearer token
 		const authHeader = request.headers.get('Authorization');
-		if (!authHeader || !authHeader.startsWith('Bearer ')) {
+		if (!authHeader || (!authHeader.startsWith('Bearer ') && !authHeader.startsWith('Basic '))) {
 			return new Response(JSON.stringify({ error: 'Missing or invalid Authorization header.' }), {
 				status: 401,
 				headers: baseHeaders
 			});
 		}
+		let token = null;
+		if (authHeader.startsWith('Basic ')) {
+			const decoded = atob(authHeader.slice('Basic '.length));
+			token = decoded.split(':')[1];
+		} else if (authHeader.startsWith('Bearer ')) {
+			token = authHeader.slice('Bearer '.length);
+		}
 
-		const token = authHeader.slice('Bearer '.length);
+		if (!token) {
+			return new Response(JSON.stringify({ error: 'Missing token in Authorization header.' }), {
+				status: 401,
+				headers: baseHeaders
+			});
+		}
+
 		const payload = await verifyJwt(token, secretKey);
 		if (!payload || !payload.tokenId) {
 			return new Response(JSON.stringify({ error: 'Invalid or expired token.' }), {
@@ -417,10 +411,20 @@ async function handleBatchRequest(request, env, secretKey) {
 	if (operation === "upload") {
 		// Parse Authorization header for JWT
 		const authHeader = request.headers.get('Authorization');
-		if (!authHeader || !authHeader.startsWith('Bearer ')) {
+		if (!authHeader || (!authHeader.startsWith('Bearer ') && !authHeader.startsWith('Basic '))) {
 			return JSON.stringify({ message: 'Missing or invalid Authorization header.' });
 		}
-		token = authHeader.slice('Bearer '.length);
+		if (authHeader.startsWith('Basic ')) {
+			const decoded = atob(authHeader.slice('Basic '.length));
+			token = decoded.split(':')[1];
+		} else if (authHeader.startsWith('Bearer ')) {
+			token = authHeader.slice('Bearer '.length);
+		}
+
+		if (!token) {
+			return JSON.stringify({ message: 'Missing token in Authorization header.' });
+		}
+
 		payload = await verifyJwt(token, secretKey);
 		if (!payload || !payload.tokenId) {
 			return JSON.stringify({ message: 'Invalid or expired token.' });
