@@ -52,9 +52,17 @@ async function handleRequest(request, env) {
 	const secretKey = new TextEncoder().encode(env.LFS_JWT_SECRET);
 	try {
 		// Match /lfs/objects/:oid for GET (download) and PUT (upload)
-		const objectMatch = path.match(/^\/lfs\/objects\/([a-fA-F0-9]+)$/);
-		if (objectMatch) {
-			const oid = objectMatch[1];
+		if (path.startsWith('/lfs/objects/')) {
+			const oid = path.split('/').pop(); // Get the last segment as OID
+
+			// Validate OID format
+			if (!isValidOid(oid)) {
+				return new Response(JSON.stringify({ error: 'Invalid OID format.' }), {
+					status: 400,
+					headers: { 'Content-Type': 'application/json', ...corsHeaders }
+				});
+			}
+
 			return await handleObjectRequest(request, env, secretKey, oid);
 		}
 
@@ -303,7 +311,7 @@ async function handleObjectRequest(request, env, secretKey, oid) {
 	if (method === 'GET') {
 		// Download object from R2
 		try {
-			const obj = await env.LFS_BUCKET.get(oid);
+			const obj = await env.LFS_BUCKET.get(lfsObjectPath(oid));
 			if (!obj) {
 				return new Response(JSON.stringify({ error: 'Object not found.' }), {
 					status: 404,
@@ -336,9 +344,9 @@ async function handleObjectRequest(request, env, secretKey, oid) {
 		let token = null;
 		if (authHeader.startsWith('Basic ')) {
 			const decoded = atob(authHeader.slice('Basic '.length));
-			token = decoded.split(':')[1];
+			token = decoded.split(':')[1].trim();
 		} else if (authHeader.startsWith('Bearer ')) {
-			token = authHeader.slice('Bearer '.length);
+			token = authHeader.slice('Bearer '.length).trim();
 		}
 
 		if (!token) {
@@ -373,7 +381,7 @@ async function handleObjectRequest(request, env, secretKey, oid) {
 					headers: baseHeaders
 				});
 			}
-			const putRes = await env.LFS_BUCKET.put(oid, request.body);
+			const putRes = await env.LFS_BUCKET.put(lfsObjectPath(oid), request.body);
 			return new Response(null, { status: 200, headers: baseHeaders });
 		} catch (e) {
 			return new Response(JSON.stringify({ error: 'Error uploading object.' }), {
@@ -416,9 +424,9 @@ async function handleBatchRequest(request, env, secretKey) {
 		}
 		if (authHeader.startsWith('Basic ')) {
 			const decoded = atob(authHeader.slice('Basic '.length));
-			token = decoded.split(':')[1];
+			token = decoded.split(':')[1].trim();
 		} else if (authHeader.startsWith('Bearer ')) {
-			token = authHeader.slice('Bearer '.length);
+			token = authHeader.slice('Bearer '.length).trim();
 		}
 
 		if (!token) {
@@ -440,13 +448,27 @@ async function handleBatchRequest(request, env, secretKey) {
 	const results = [];
 	for (const obj of objects) {
 		const oid = obj.oid;
+
+		// Validate OID format
+		if (!isValidOid(oid)) {
+			results.push({
+				oid,
+				size: obj.size,
+				error: {
+					code: 400,
+					message: "Invalid OID format"
+				}
+			});
+			continue;
+		}
+
 		const size = obj.size;
 
 		// Check if object exists in R2
 		let exists = false;
 		try {
 			if (env.LFS_BUCKET) {
-				const r2obj = await env.LFS_BUCKET.head(oid);
+				const r2obj = await env.LFS_BUCKET.head(lfsObjectPath(oid));
 				exists = !!r2obj;
 			}
 		} catch (e) {
@@ -462,7 +484,7 @@ async function handleBatchRequest(request, env, secretKey) {
 					size,
 					actions: {
 						download: {
-							href: `${BUCKET_URL}/lfs/objects/${oid}`
+							href: `${BUCKET_URL}/${lfsObjectPath(oid)}`
 						}
 					}
 				});
@@ -488,7 +510,7 @@ async function handleBatchRequest(request, env, secretKey) {
 					size,
 					actions: {
 						upload: {
-							href: `${WORKER_URL}/lfs/objects/${oid}`,
+							href: `${WORKER_URL}/${lfsObjectPath(oid)}`,
 							header: {
 								Authorization: `Bearer ${token}`
 							}
@@ -521,4 +543,38 @@ async function handleBatchRequest(request, env, secretKey) {
 		transfer: 'basic',
 		objects: results
 	});
+}
+
+/** * Generates the object key for R2 storage based on the OID.
+ * The key is structured as lfs/objects/{first2}/{next2}/{rest}
+ * where first2 and next2 are the first two characters of the OID.
+ * @param {string} oid - The object ID (OID) to generate the key for.
+ * @returns {string} The generated object key.
+ */
+function lfsObjectPath(oid) {
+	const first2 = oid.slice(0, 2);
+	const next2 = oid.slice(2, 4);
+	const rest = oid.slice(4);
+	return `lfs/objects/${first2}/${next2}/${rest}`;
+}
+
+/** * Validates if the given OID is a valid Git LFS object ID.
+ * A valid OID is a 64-character hexadecimal string.
+ * @param {string} oid - The object ID to validate.
+ * @returns {boolean} True if valid, false otherwise.
+ */
+function isValidOid(oid) {
+	if (oid.length !== 64 || oid.includes('/') || oid.includes('\\')) return false;
+	for (let i = 0; i < 64; i++) {
+		const c = oid[i];
+		if (
+			!((c >= 48 && c <= 57) // 0-9
+				|| (c >= 97 && c <= 102) // a-f
+				|| (c >= 65 && c <= 70) // A-F
+			)
+		) {
+			return false;
+		}
+	}
+	return true;
 }
