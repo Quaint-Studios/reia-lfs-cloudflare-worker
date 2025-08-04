@@ -57,7 +57,7 @@ async function handleRequest(request, env) {
 
 			// Validate OID format
 			if (!isValidOid(oid)) {
-				return new Response(JSON.stringify({ error: 'Invalid OID format.' }), {
+				return new Response(JSON.stringify({ error: 'Invalid OID format.', oid }), {
 					status: 400,
 					headers: { 'Content-Type': 'application/json', ...corsHeaders }
 				});
@@ -86,8 +86,8 @@ async function handleRequest(request, env) {
 				break;
 			case '/objects/batch':
 				// Handle Git LFS Batch requests (upload/download metadata)
-				if (method === 'POST') {
-					const batchResponse = await handleBatchRequest(request, env, secretKey); // Implementing soon. Ignore.
+				if (method === 'POST' || method === 'GET') {
+					const batchResponse = await handleBatchRequest(request, env, secretKey);
 					return new Response(batchResponse, { status: 200, headers: { 'Content-Type': LFS_CONTENT_TYPE, ...corsHeaders } });
 				}
 				break;
@@ -327,6 +327,7 @@ async function handleObjectRequest(request, env, secretKey, oid) {
 			}
 			return new Response(obj.body, { status: 200, headers });
 		} catch (e) {
+			console.error(`Error retrieving object ${oid}:`, e);
 			return new Response(JSON.stringify({ error: 'Error reading object.' }), {
 				status: 500,
 				headers: baseHeaders
@@ -384,6 +385,7 @@ async function handleObjectRequest(request, env, secretKey, oid) {
 			const putRes = await env.LFS_BUCKET.put(lfsObjectPath(oid), request.body);
 			return new Response(null, { status: 200, headers: baseHeaders });
 		} catch (e) {
+			console.error(`Error uploading object ${oid}:`, e);
 			return new Response(JSON.stringify({ error: 'Error uploading object.' }), {
 				status: 500,
 				headers: baseHeaders
@@ -456,7 +458,8 @@ async function handleBatchRequest(request, env, secretKey) {
 				size: obj.size,
 				error: {
 					code: 400,
-					message: "Invalid OID format"
+					message: "Invalid OID format",
+					oid
 				}
 			});
 			continue;
@@ -474,6 +477,7 @@ async function handleBatchRequest(request, env, secretKey) {
 		} catch (e) {
 			// If R2 errors, treat as missing
 			exists = false;
+			console.error(`Error checking existence of object ${oid}:`, e);
 		}
 
 		if (operation === "download") {
@@ -495,7 +499,9 @@ async function handleBatchRequest(request, env, secretKey) {
 					size,
 					error: {
 						code: 404,
-						message: "Object does not exist"
+						message: "Object does not exist",
+						oid,
+						href: `${BUCKET_URL}/${lfsObjectPath(oid)}`
 					}
 				});
 			}
@@ -554,8 +560,7 @@ async function handleBatchRequest(request, env, secretKey) {
 function lfsObjectPath(oid) {
 	const first2 = oid.slice(0, 2);
 	const next2 = oid.slice(2, 4);
-	const rest = oid.slice(4);
-	return `lfs/objects/${first2}/${next2}/${rest}`;
+	return `lfs/objects/${first2}/${next2}/${oid}`;
 }
 
 /** * Validates if the given OID is a valid Git LFS object ID.
@@ -566,7 +571,7 @@ function lfsObjectPath(oid) {
 function isValidOid(oid) {
 	if (oid.length !== 64 || oid.includes('/') || oid.includes('\\')) return false;
 	for (let i = 0; i < 64; i++) {
-		const c = oid[i];
+		const c = oid.charCodeAt(i);
 		if (
 			!((c >= 48 && c <= 57) // 0-9
 				|| (c >= 97 && c <= 102) // a-f
