@@ -79,7 +79,7 @@ type `git lfs env` and you should see `Endpoint=https://lfs.playreia.com/objects
 
 You need a valid JWT token (from `/generate` and present in your KV store) for uploads.
 
-**Option 1: Use** `git credentials approve`
+**Option 1: Use** `git credential approve`
 Then paste this in there (make sure the change the JWT token):
 ```ini
 protocol=https
