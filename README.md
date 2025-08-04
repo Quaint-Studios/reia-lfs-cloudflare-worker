@@ -66,11 +66,11 @@ Create a `.lfsconfig` file in your Git repository:
 
 ```ini
 [lfs]
-url = https://lfs.playreia.com/objects/batch
+url = https://lfs.playreia.com
 ```
 or set it globally
 ```sh
-git config --global lfs.url https://lfs.playreia.com/objects/batch
+git config --global lfs.url https://lfs.playreia.com
 ```
 
 type `git lfs env` and you should see `Endpoint=https://lfs.playreia.com/objects/batch (auth=none)`
