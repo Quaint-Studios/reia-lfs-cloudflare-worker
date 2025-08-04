@@ -62,18 +62,26 @@ Bind these to your Worker:
 
 ### Configure LFS URL
 
-Create a `.lfsconfig` file in your Git repository:
+1. Create a `.lfsconfig` file in your Git repository:
 
 ```ini
 [lfs]
 url = https://lfs.playreia.com
 ```
-or set it globally
+or set it globally **(sets it for every repository so maybe not unless that's all your user/system uses)**
 ```sh
 git config --global lfs.url https://lfs.playreia.com
 ```
 
-type `git lfs env` and you should see `Endpoint=https://lfs.playreia.com/objects/batch (auth=none)`
+2. **(Optional if you want write access)** Update your global config:
+```git config --global --edit```
+and set its access to basic
+```ini
+[lfs "https://lfs.playreia.com"]
+	access = "basic"
+```
+
+type `git lfs env` and you should see `Endpoint=https://lfs.playreia.com/objects/batch (auth=none)` or `(auth=basic)` if you set your access.
 
 ### Authenticate for Uploads
 
